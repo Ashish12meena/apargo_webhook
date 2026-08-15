@@ -1,0 +1,39 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550783881",
+              "phone_number_id": "106540352242922"
+            },
+            "contacts": [
+              { "profile": { "name": "Kerry Fisher" }, "wa_id": "16505551234" }
+            ],
+            "messages": [
+              {
+                "from": "16505551234",
+                "id": "wamid.ID.IMAGE.001",
+                "timestamp": "1755109260",
+                "type": "image",
+                "context": { "from": "15550783881", "id": "wamid.ORIGINAL.001" },
+                "image": {
+                  "caption": "Here is the receipt",
+                  "mime_type": "image/jpeg",
+                  "sha256": "d1f2a3b4c5",
+                  "id": "1013859600285441"
+                },
+                "some_future_field_meta_added": { "nested": true }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

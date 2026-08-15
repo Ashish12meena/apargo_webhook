@@ -1,0 +1,54 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "WABA_ONE",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": { "display_phone_number": "15550783881", "phone_number_id": "PHONE_ONE" },
+            "messages": [
+              { "from": "16505551234", "id": "wamid.A1", "timestamp": "1755109200", "type": "text", "text": { "body": "one" } }
+            ]
+          }
+        },
+        {
+          "field": "message_template_quality_update",
+          "value": {
+            "previous_quality_score": "GREEN",
+            "new_quality_score": "YELLOW",
+            "message_template_id": 111222333,
+            "message_template_name": "promo_a",
+            "message_template_language": "en_US"
+          }
+        }
+      ]
+    },
+    {
+      "id": "WABA_TWO",
+      "changes": [
+        {
+          "field": "phone_number_quality_update",
+          "value": {
+            "display_phone_number": "15550784444",
+            "event": "FLAGGED",
+            "current_limit": "TIER_1K",
+            "metadata": { "phone_number_id": "PHONE_TWO" }
+          }
+        },
+        {
+          "field": "user_preferences",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": { "display_phone_number": "15550783881", "phone_number_id": "PHONE_ONE" },
+            "user_preferences": [
+              { "wa_id": "16505559999", "detail": "User requested to stop marketing messages", "category": "marketing_messages", "value": "stop", "timestamp": "1755109500" }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

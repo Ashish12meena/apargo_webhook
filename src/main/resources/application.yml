@@ -1,0 +1,182 @@
+# ---------------------------------------------------------------------------
+# webhook-service — single source of truth for configuration.
+#
+# Every environment-specific value is read from an environment variable, and
+# the .env file below is imported as a property source, so a deployment only
+# ever needs a populated .env (or real environment variables, which win).
+# Nothing in this file needs editing per environment.
+# ---------------------------------------------------------------------------
+spring:
+  application:
+    name: webhook-service
+
+  config:
+    import:
+      # Local development: ./.env next to the jar / project root.
+      - optional:file:./.env[.properties]
+      # Container convention: mounted secret file.
+      - optional:file:/config/.env[.properties]
+
+  main:
+    banner-mode: ${BANNER_MODE:console}
+
+  lifecycle:
+    # Long enough for in-flight relay publishes to settle before the context closes.
+    timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT:30s}
+
+  threads:
+    virtual:
+      enabled: true
+
+  codec:
+    max-in-memory-size: 3MB
+
+  jackson:
+    default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: false
+    serialization:
+      write-dates-as-timestamps: false
+
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/apargo_webhook}
+      auto-index-creation: false   # indexes are created explicitly, see MongoIndexInitializer
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DATABASE:0}
+      # If Redis requires auth, set SPRING_DATA_REDIS_USERNAME / SPRING_DATA_REDIS_PASSWORD
+      # in .env. They are left unset here so an empty value is never sent as credentials.
+      timeout: ${REDIS_TIMEOUT:1000ms}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:1000ms}
+      lettuce:
+        pool:
+          enabled: true
+          max-active: ${REDIS_POOL_MAX_ACTIVE:16}
+          max-idle: ${REDIS_POOL_MAX_IDLE:8}
+          min-idle: ${REDIS_POOL_MIN_IDLE:1}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    client-id: ${spring.application.name}
+    producer:
+      acks: all
+      retries: 5
+      compression-type: snappy
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        delivery.timeout.ms: ${KAFKA_DELIVERY_TIMEOUT_MS:120000}
+        request.timeout.ms: ${KAFKA_REQUEST_TIMEOUT_MS:30000}
+        linger.ms: ${KAFKA_LINGER_MS:5}
+
+server:
+  port: ${SERVER_PORT:8085}
+  shutdown: graceful
+  forward-headers-strategy: framework
+  # Meta payloads reach 3 MB; a 413 from Tomcat is indistinguishable from an outage to Meta.
+  max-http-request-header-size: 16KB
+  tomcat:
+    max-http-form-post-size: 3MB
+    max-swallow-size: 4MB
+    connection-timeout: ${TOMCAT_CONNECTION_TIMEOUT:20s}
+
+# ---------------------------------------------------------------------------
+# Service configuration — bound to WebhookProperties (@ConfigurationProperties)
+# ---------------------------------------------------------------------------
+webhook:
+  meta:
+    # No defaults. A secret with a fallback value is a secret in git history.
+    verify-token: ${WHATSAPP_WEBHOOK_VERIFY_TOKEN:}
+    app-secret: ${WHATSAPP_APP_SECRET:}
+    signature-header: X-Hub-Signature-256
+    # Set false ONLY in local dev. Never in any deployed environment.
+    verify-signature: ${WEBHOOK_VERIFY_SIGNATURE:true}
+
+  ingest:
+    max-payload-size: 3MB          # Meta's documented ceiling
+    dedupe-ttl: 24h
+
+  relay:
+    enabled: ${WEBHOOK_RELAY_ENABLED:true}
+    poll-interval: 500ms
+    batch-size: 100
+    lease: 30s
+    lease-reclaim-interval: 30s
+    max-attempts: 10
+    backoff-base: 1s
+    backoff-max: 5m
+    metrics-interval: 30s
+
+  topics:
+    inbound: ${TOPIC_INBOUND:whatsapp.webhook.inbound}
+    status: ${TOPIC_STATUS:whatsapp.webhook.status}
+    template: ${TOPIC_TEMPLATE:whatsapp.webhook.template}
+    account: ${TOPIC_ACCOUNT:whatsapp.webhook.account}
+    user-preference: ${TOPIC_USER_PREFERENCE:whatsapp.webhook.user-preference}
+    unrouted: ${TOPIC_UNROUTED:whatsapp.webhook.unrouted}
+    auto-create: ${KAFKA_TOPIC_AUTO_CREATE:true}
+    replicas: ${KAFKA_TOPIC_REPLICAS:1}
+    partitions:
+      inbound: 6
+      status: 12
+      template: 3
+      account: 3
+      user-preference: 3
+      unrouted: 1
+
+  retention:
+    event-ttl: 30d
+
+  internal:
+    api-key: ${INTERNAL_API_KEY:}
+    header-name: X-Internal-Api-Key
+
+# ---------------------------------------------------------------------------
+# Service discovery
+# ---------------------------------------------------------------------------
+eureka:
+  client:
+    enabled: ${EUREKA_ENABLED:false}
+    register-with-eureka: ${EUREKA_REGISTER:true}
+    fetch-registry: ${EUREKA_FETCH_REGISTRY:true}
+    service-url:
+      defaultZone: ${EUREKA_SERVICE_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: ${EUREKA_PREFER_IP:true}
+    instance-id: ${spring.application.name}:${random.value}
+    lease-renewal-interval-in-seconds: 10
+
+# ---------------------------------------------------------------------------
+# Observability
+# ---------------------------------------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: ${HEALTH_SHOW_DETAILS:when_authorized}
+      probes:
+        enabled: true
+  health:
+    redis:
+      # Redis is an optimisation; its absence must never fail the service health check.
+      enabled: false
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  observations:
+    key-values:
+      service: ${spring.application.name}
+
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.apargo.services.webhook: ${LOG_LEVEL_APP:INFO}
+    org.apache.kafka.clients: WARN
+    org.mongodb.driver: WARN

@@ -1,0 +1,44 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550783881",
+              "phone_number_id": "106540352242922"
+            },
+            "statuses": [
+              {
+                "id": "wamid.STATUS.001",
+                "status": "sent",
+                "timestamp": "1755109300",
+                "recipient_id": "16505551234",
+                "biz_opaque_callback_data": "msg:9f8c2b41-0a3e-4f11-9a77-2d1c0b5e7a10",
+                "pricing": { "billable": true, "pricing_model": "CBP", "category": "utility" }
+              },
+              {
+                "id": "wamid.STATUS.001",
+                "status": "delivered",
+                "timestamp": "1755109305",
+                "recipient_id": "16505551234",
+                "biz_opaque_callback_data": "msg:9f8c2b41-0a3e-4f11-9a77-2d1c0b5e7a10"
+              },
+              {
+                "id": "wamid.STATUS.002",
+                "status": "read",
+                "timestamp": "1755109310",
+                "recipient_id": "16505551234",
+                "biz_opaque_callback_data": "cmp:7c41e2aa-55b2-4c0f-9f3e-8a2b1d4c6e90"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

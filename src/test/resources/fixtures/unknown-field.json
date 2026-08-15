@@ -1,0 +1,17 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "field": "some_field_meta_added_last_tuesday",
+          "value": {
+            "metadata": { "display_phone_number": "15550783881", "phone_number_id": "106540352242922" },
+            "anything": { "at": "all" }
+          }
+        }
+      ]
+    }
+  ]
+}
