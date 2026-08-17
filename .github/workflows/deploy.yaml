@@ -1,0 +1,41 @@
+name: Webhook Service CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.PORT }}
+
+          script: |
+            set -e
+
+            cd /var/aigreentick-new-structure-node-spring/spring-boot/apargo_webhook
+
+            echo "Pulling latest code..."
+            git pull origin main
+
+            echo "Building project..."
+            mvn clean install
+
+            echo "Restarting service..."
+            systemctl restart java-apargo-webhook.service
+
+            echo "Checking service status..."
+            sleep 20
+            systemctl is-active java-apargo-webhook.service
+
+            echo "Deployment Successful!"
