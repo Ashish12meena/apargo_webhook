@@ -12,6 +12,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
  * resolution, no calls to other services — because exactly one codebase is responsible for never
  * losing a Meta event, and it must have nothing in it that could break that.
  */
+
 @SpringBootApplication
 @ConfigurationPropertiesScan
 public class WebhookApplication {
