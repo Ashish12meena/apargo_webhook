@@ -28,6 +28,16 @@ spring:
     virtual:
       enabled: true
 
+  # The scheduler pool is shared by EventRelayScheduler, LeaseReclaimScheduler and
+  # RelayMetricsScheduler. Spring's default is a SINGLE thread: one slow drain tick
+  # stalls lease reclaim and the relay-lag gauge along with it — meaning the one
+  # metric that would tell you the relay is stuck stops updating precisely when the
+  # relay gets stuck.
+  task:
+    scheduling:
+      pool:
+        size: ${SCHEDULER_POOL_SIZE:4}
+
   codec:
     max-in-memory-size: 3MB
 
@@ -72,6 +82,12 @@ spring:
         delivery.timeout.ms: ${KAFKA_DELIVERY_TIMEOUT_MS:120000}
         request.timeout.ms: ${KAFKA_REQUEST_TIMEOUT_MS:30000}
         linger.ms: ${KAFKA_LINGER_MS:5}
+        # KafkaTemplate.send() blocks the CALLING thread waiting for cluster metadata.
+        # EventRelayService.publish() calls it synchronously inside a loop over a batch
+        # of up to 100, so the Kafka default of 60s means one unreachable broker freezes
+        # the poll loop for over an hour per batch. 5s is ample for a healthy broker and
+        # fails fast on a dead one, letting the event land in markForRetry with backoff.
+        max.block.ms: ${KAFKA_MAX_BLOCK_MS:5000}
 
 server:
   port: ${SERVER_PORT:8085}
@@ -101,6 +117,9 @@ webhook:
     dedupe-ttl: 24h
 
   relay:
+    # EventRelayScheduler is @ConditionalOnProperty on this value. Set to false and the
+    # bean is never created, nothing polls the outbox, and events pile up in PENDING
+    # with no error logged anywhere.
     enabled: ${WEBHOOK_RELAY_ENABLED:true}
     poll-interval: 500ms
     batch-size: 100
@@ -157,7 +176,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        # 'loggers' lets you read the level that was ACTUALLY applied at runtime, and
+        # flip it live without a restart:
+        #   curl localhost:8085/actuator/loggers/com.apargo.services.webhook
+        #   curl -X POST localhost:8085/actuator/loggers/com.apargo.services.webhook \
+        #     -H 'Content-Type: application/json' -d '{"configuredLevel":"DEBUG"}'
+        include: health,info,metrics,prometheus,loggers
   endpoint:
     health:
       show-details: ${HEALTH_SHOW_DETAILS:when_authorized}
@@ -166,6 +190,8 @@ management:
   health:
     redis:
       # Redis is an optimisation; its absence must never fail the service health check.
+      # Note the consequence: a dead Redis shows only as a WARN per request in the log,
+      # never in /actuator/health.
       enabled: false
   metrics:
     tags:
@@ -176,9 +202,24 @@ management:
 
 logging:
   level:
-    root: INFO
-    com.apargo.services.webhook: DEBUG
+    root: ${LOG_LEVEL_ROOT:INFO}
+    # DEBUG during development turns on the three lines that are otherwise invisible:
+    # "Ingest outcome=..." (controller), "Duplicate webhook body suppressed" (ingest),
+    # and "Relay claimed N event(s)" (relay). Without them a deduped webhook produces
+    # no output at all and looks like a dropped request. Set LOG_LEVEL_APP=INFO in prod.
+    #
+    # If this resolves to nothing, check that .env does not contain the key with an
+    # EMPTY value — Spring's ":DEBUG" default applies only when a property is absent,
+    # not when it is present and blank.
+    com.apargo.services.webhook: ${LOG_LEVEL_APP:DEBUG}
     org.apache.kafka.clients: WARN
     org.mongodb.driver: WARN
+  charset:
+    console: UTF-8
   pattern:
+    # %X{correlationId} is what actually prints the MDC value CorrelationIdFilter sets;
+    # Spring's default pattern drops it, which is why it never appeared before.
+    # The :-no-corr fallback is expected on relay and Kafka-callback threads — MDC is
+    # thread-local, so those lines legitimately have no correlation id. Join ingest to
+    # relay on eventId, not correlationId.
     console: "%d{HH:mm:ss.SSS} %highlight(%-5level) [%X{correlationId:-no-corr}] %cyan(%logger{36}) - %msg%n"
