@@ -176,7 +176,9 @@ management:
 
 logging:
   level:
-    root: ${LOG_LEVEL_ROOT:INFO}
-    com.apargo.services.webhook: ${LOG_LEVEL_APP:INFO}
+    root: INFO
+    com.apargo.services.webhook: DEBUG
     org.apache.kafka.clients: WARN
     org.mongodb.driver: WARN
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %highlight(%-5level) [%X{correlationId:-no-corr}] %cyan(%logger{36}) - %msg%n"
