@@ -53,9 +53,9 @@ spring:
       uri: ${MONGO_URI:mongodb://localhost:27017/apargo_webhook}
       auto-index-creation: false   # indexes are created explicitly, see MongoIndexInitializer
     redis:
-      host: ${REDIS_HOST:localhost}
+      host: ${REDIS_HOST:146.88.24.113}
       port: ${REDIS_PORT:6379}
-      database: ${REDIS_DATABASE:0}
+      # database: ${REDIS_DATABASE:0}
       # If Redis requires auth, set SPRING_DATA_REDIS_USERNAME / SPRING_DATA_REDIS_PASSWORD
       # in .env. They are left unset here so an empty value is never sent as credentials.
       timeout: ${REDIS_TIMEOUT:1000ms}
@@ -68,7 +68,7 @@ spring:
           min-idle: ${REDIS_POOL_MIN_IDLE:1}
 
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:146.88.24.113:9092}
     client-id: ${spring.application.name}
     producer:
       acks: all
@@ -90,7 +90,7 @@ spring:
         max.block.ms: ${KAFKA_MAX_BLOCK_MS:5000}
 
 server:
-  port: ${SERVER_PORT:8085}
+  port: ${SERVER_PORT:8090}
   shutdown: graceful
   forward-headers-strategy: framework
   # Meta payloads reach 3 MB; a 413 from Tomcat is indistinguishable from an outage to Meta.
