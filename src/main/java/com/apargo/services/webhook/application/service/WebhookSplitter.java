@@ -5,6 +5,7 @@ import com.apargo.services.webhook.domain.exception.UnparseablePayloadException;
 import com.apargo.services.webhook.domain.model.EventState;
 import com.apargo.services.webhook.domain.model.Lane;
 import com.apargo.services.webhook.domain.model.MetaField;
+import com.apargo.services.webhook.domain.model.MetaJson;
 import com.apargo.services.webhook.domain.model.WebhookEvent;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -34,8 +35,6 @@ public class WebhookSplitter {
 
     private static final TypeReference<Map<String, Object>> PAYLOAD_TYPE = new TypeReference<>() {
     };
-    private static final String TRUNCATED_FIELD = "__oversized__";
-    private static final String TRUNCATED_PAYLOAD_KEY = "rawBodyPrefix";
 
     private final ObjectMapper objectMapper;
     private final LaneClassifier laneClassifier;
@@ -65,14 +64,14 @@ public class WebhookSplitter {
         JsonNode root = parse(rawBody);
         List<WebhookEvent> events = new ArrayList<>();
 
-        for (JsonNode entry : JsonNodes.array(root, "entry")) {
-            String providerWabaId = JsonNodes.text(entry, "id");
+        for (JsonNode entry : JsonNodes.array(root, MetaJson.ENTRY)) {
+            String providerWabaId = JsonNodes.text(entry, MetaJson.ID);
 
-            for (JsonNode change : JsonNodes.array(entry, "changes")) {
-                String field = JsonNodes.text(change, "field");
-                JsonNode value = change.path("value");
+            for (JsonNode change : JsonNodes.array(entry, MetaJson.CHANGES)) {
+                String field = JsonNodes.text(change, MetaJson.FIELD);
+                JsonNode value = change.path(MetaJson.VALUE);
                 String providerPhoneNumberId =
-                        JsonNodes.text(value.path("metadata"), "phone_number_id");
+                        JsonNodes.text(value.path(MetaJson.METADATA), MetaJson.PHONE_NUMBER_ID);
 
                 Map<String, Object> payload = toPayload(change);
                 List<String> wamids = collectWamids(value);
@@ -115,15 +114,15 @@ public class WebhookSplitter {
         return WebhookEvent.builder()
                 .receivedAt(receivedAt)
                 .bodyHash(bodyHash)
-                .field(TRUNCATED_FIELD)
+                .field(MetaJson.TRUNCATED_FIELD)
                 .lane(Lane.OTHER)
                 .topic(topicResolver.resolve(Lane.OTHER))
                 .partitionKey(bodyHash)
                 .wamids(List.of())
                 .eventCount(0)
                 .payload(Map.of(
-                        TRUNCATED_PAYLOAD_KEY, prefix,
-                        "originalSizeBytes", rawBody.length))
+                        MetaJson.TRUNCATED_PAYLOAD_KEY, prefix,
+                        MetaJson.TRUNCATED_ORIGINAL_SIZE_KEY, rawBody.length))
                 .truncated(true)
                 .state(EventState.PENDING)
                 .attempts(0)
@@ -155,14 +154,14 @@ public class WebhookSplitter {
     /** Cheap extract for support search only. Never used for routing or business logic. */
     private List<String> collectWamids(JsonNode value) {
         Set<String> wamids = new LinkedHashSet<>();
-        collectIds(JsonNodes.array(value, "messages"), wamids);
-        collectIds(JsonNodes.array(value, "statuses"), wamids);
+        collectIds(JsonNodes.array(value, MetaJson.MESSAGES), wamids);
+        collectIds(JsonNodes.array(value, MetaJson.STATUSES), wamids);
         return List.copyOf(wamids);
     }
 
     private void collectIds(JsonNode array, Set<String> sink) {
         for (JsonNode element : array) {
-            String id = JsonNodes.text(element, "id");
+            String id = JsonNodes.text(element, MetaJson.ID);
             if (id != null) {
                 sink.add(id);
             }
@@ -173,6 +172,7 @@ public class WebhookSplitter {
         if (!MetaField.MESSAGES.equals(field)) {
             return 1;
         }
-        return JsonNodes.array(value, "messages").size() + JsonNodes.array(value, "statuses").size();
+        return JsonNodes.array(value, MetaJson.MESSAGES).size()
+                + JsonNodes.array(value, MetaJson.STATUSES).size();
     }
 }

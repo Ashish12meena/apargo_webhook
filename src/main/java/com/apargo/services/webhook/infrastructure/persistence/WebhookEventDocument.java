@@ -73,6 +73,14 @@ public class WebhookEventDocument {
     /** Null unless {@link EventState#PUBLISHING}. */
     private Instant leaseUntil;
 
+    /**
+     * Identifies which claim marked this document, so the claiming worker can find exactly the
+     * documents it won without a round trip per document. Unset on every terminal transition, which
+     * keeps the sparse index over it roughly the size of the in-flight set rather than the
+     * collection.
+     */
+    private String claimToken;
+
     private String lastError;
 
     private Instant publishedAt;
@@ -91,6 +99,7 @@ public class WebhookEventDocument {
         public static final String ATTEMPTS = "attempts";
         public static final String NEXT_ATTEMPT_AT = "nextAttemptAt";
         public static final String LEASE_UNTIL = "leaseUntil";
+        public static final String CLAIM_TOKEN = "claimToken";
         public static final String LAST_ERROR = "lastError";
         public static final String PUBLISHED_AT = "publishedAt";
 

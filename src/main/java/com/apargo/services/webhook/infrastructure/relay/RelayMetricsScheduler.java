@@ -2,6 +2,7 @@ package com.apargo.services.webhook.infrastructure.relay;
 
 import com.apargo.services.webhook.application.port.out.WebhookEventRepositoryPort;
 import com.apargo.services.webhook.domain.model.EventState;
+import com.apargo.services.webhook.infrastructure.config.WebhookDefaults;
 import com.apargo.services.webhook.infrastructure.metrics.WebhookMetrics;
 import java.time.Clock;
 import java.time.Duration;
@@ -21,6 +22,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class RelayMetricsScheduler {
 
+    private static final String METRICS_INTERVAL =
+            "${webhook.relay.metrics-interval:" + WebhookDefaults.RELAY_METRICS_INTERVAL + "}";
+
     private final WebhookEventRepositoryPort repository;
     private final WebhookMetrics metrics;
     private final Clock clock;
@@ -33,8 +37,8 @@ public class RelayMetricsScheduler {
     }
 
     @Scheduled(
-            fixedDelayString = "${webhook.relay.metrics-interval:30s}",
-            initialDelayString = "${webhook.relay.metrics-interval:30s}")
+            fixedDelayString = METRICS_INTERVAL,
+            initialDelayString = METRICS_INTERVAL)
     public void refresh() {
         try {
             long pending = repository.countByState(EventState.PENDING);

@@ -53,7 +53,7 @@ public class InternalApiKeyFilter extends OncePerRequestFilter {
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         objectMapper.writeValue(
                 response.getOutputStream(),
-                ApiResponse.failure(ApiError.of("UNAUTHORIZED",
+                ApiResponse.failure(ApiError.of(ApiConstants.ERROR_UNAUTHORIZED,
                         "A valid " + properties.internal().headerName() + " header is required")));
     }
 

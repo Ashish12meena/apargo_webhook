@@ -17,15 +17,11 @@ import org.springframework.core.Ordered;
 @Configuration(proxyBeanMethods = false)
 public class WebFilterConfig {
 
-    /** Support endpoints guarded by the internal key. Keep in sync with WebhookEventController. */
-    private static final String INTERNAL_PATH_PATTERN = "/api/v1/webhook-events/*";
-    private static final String INTERNAL_ROOT_PATTERN = "/api/v1/webhook-events";
-
     @Bean
     public FilterRegistrationBean<CorrelationIdFilter> correlationIdFilter() {
         FilterRegistrationBean<CorrelationIdFilter> registration =
                 new FilterRegistrationBean<>(new CorrelationIdFilter());
-        registration.addUrlPatterns("/*");
+        registration.addUrlPatterns(ApiConstants.ALL_PATHS_PATTERN);
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
         return registration;
     }
@@ -35,7 +31,9 @@ public class WebFilterConfig {
             WebhookProperties properties, ObjectMapper objectMapper) {
         FilterRegistrationBean<InternalApiKeyFilter> registration =
                 new FilterRegistrationBean<>(new InternalApiKeyFilter(properties, objectMapper));
-        registration.addUrlPatterns(INTERNAL_ROOT_PATTERN, INTERNAL_PATH_PATTERN);
+        registration.addUrlPatterns(
+                ApiConstants.WEBHOOK_EVENTS_ROOT_PATTERN,
+                ApiConstants.WEBHOOK_EVENTS_SUBTREE_PATTERN);
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
         return registration;
     }

@@ -46,41 +46,49 @@ public class MongoIndexInitializer implements ApplicationRunner {
                 .on(WebhookEventDocument.Fields.STATE, Sort.Direction.ASC)
                 .on(WebhookEventDocument.Fields.NEXT_ATTEMPT_AT, Sort.Direction.ASC)
                 .on(WebhookEventDocument.Fields.ID, Sort.Direction.ASC)
-                .named("relay_drain"));
+                .named(PersistenceConstants.INDEX_RELAY_DRAIN));
+
+        // The second half of the token claim: find everything this worker just stamped. Sparse, so
+        // it holds roughly the in-flight set rather than the whole collection — the token is unset
+        // on every terminal transition.
+        ensure(events, new Index()
+                .on(WebhookEventDocument.Fields.CLAIM_TOKEN, Sort.Direction.ASC)
+                .sparse()
+                .named(PersistenceConstants.INDEX_CLAIM_TOKEN));
 
         // Lease reclaim sweep.
         ensure(events, new Index()
                 .on(WebhookEventDocument.Fields.STATE, Sort.Direction.ASC)
                 .on(WebhookEventDocument.Fields.LEASE_UNTIL, Sort.Direction.ASC)
-                .named("lease_reclaim"));
+                .named(PersistenceConstants.INDEX_LEASE_RECLAIM));
 
         // Retention. This service is the platform's replay log, and this is how long it lasts.
         Duration eventTtl = properties.retention().eventTtl();
         ensure(events, new Index()
                 .on(WebhookEventDocument.Fields.RECEIVED_AT, Sort.Direction.ASC)
                 .expire(eventTtl)
-                .named("received_at_ttl"));
+                .named(PersistenceConstants.INDEX_RECEIVED_AT_TTL));
 
         // Support search.
         ensure(events, new Index()
                 .on(WebhookEventDocument.Fields.PROVIDER_PHONE_NUMBER_ID, Sort.Direction.ASC)
                 .on(WebhookEventDocument.Fields.RECEIVED_AT, Sort.Direction.DESC)
-                .named("support_by_phone_number"));
+                .named(PersistenceConstants.INDEX_SUPPORT_BY_PHONE_NUMBER));
 
         ensure(events, new Index()
                 .on(WebhookEventDocument.Fields.WAMIDS, Sort.Direction.ASC)
                 .sparse()
-                .named("support_by_wamid"));
+                .named(PersistenceConstants.INDEX_SUPPORT_BY_WAMID));
 
         // Dedupe fallback lookups.
         ensure(events, new Index()
                 .on(WebhookEventDocument.Fields.BODY_HASH, Sort.Direction.ASC)
-                .named("body_hash"));
+                .named(PersistenceConstants.INDEX_BODY_HASH));
 
         ensure(mongoTemplate.indexOps(DedupeDocument.class), new Index()
                 .on(DedupeDocument.SEEN_AT, Sort.Direction.ASC)
                 .expire(properties.ingest().dedupeTtl())
-                .named("seen_at_ttl"));
+                .named(PersistenceConstants.INDEX_DEDUPE_TTL));
 
         log.info("Mongo indexes verified: events TTL {}d, dedupe TTL {}h",
                 eventTtl.toDays(), properties.ingest().dedupeTtl().toHours());

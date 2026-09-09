@@ -6,6 +6,7 @@ import com.apargo.services.webhook.domain.model.PageResult;
 import com.apargo.services.webhook.domain.model.WebhookEvent;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,6 +27,20 @@ public interface WebhookEventRepositoryPort {
      */
     List<WebhookEvent> claimBatch(int batchSize, Duration lease, Instant now);
 
+    /**
+     * Marks a whole batch of acknowledged events PUBLISHED in as few writes as possible.
+     *
+     * <p>This is the bulk form of {@link #markPublished}, and the reason both exist is placement
+     * rather than performance: publish confirmations arrive on the Kafka producer's single sender
+     * thread, so they are collected there and written from somewhere else. Implementations must
+     * tolerate ids that no longer match anything — a replay or a TTL expiry can remove a document
+     * between the acknowledgement and the flush.
+     *
+     * @return how many documents were actually modified
+     */
+    int markPublishedBatch(Collection<String> ids, Instant publishedAt);
+
+    /** Single-document form, used by the replay path. */
     void markPublished(String id, Instant publishedAt);
 
     void markForRetry(String id, int attempts, Instant nextAttemptAt, String lastError);

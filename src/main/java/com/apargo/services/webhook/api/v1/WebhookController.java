@@ -1,5 +1,6 @@
 package com.apargo.services.webhook.api.v1;
 
+import com.apargo.services.webhook.api.support.ApiConstants;
 import com.apargo.services.webhook.application.port.in.IngestWebhookUseCase;
 import com.apargo.services.webhook.domain.exception.InvalidSignatureException;
 import com.apargo.services.webhook.domain.exception.UnparseablePayloadException;
@@ -40,7 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/webhook")
+@RequestMapping(ApiConstants.WEBHOOK_PATH)
 public class WebhookController {
 
     private final IngestWebhookUseCase ingestUseCase;
@@ -57,9 +58,9 @@ public class WebhookController {
      */
     @GetMapping(produces = MediaType.TEXT_PLAIN_VALUE)
     public ResponseEntity<String> verifySubscription(
-            @RequestParam(name = "hub.mode", required = false) String mode,
-            @RequestParam(name = "hub.verify_token", required = false) String verifyToken,
-            @RequestParam(name = "hub.challenge", required = false) String challenge) {
+            @RequestParam(name = ApiConstants.HUB_MODE, required = false) String mode,
+            @RequestParam(name = ApiConstants.HUB_VERIFY_TOKEN, required = false) String verifyToken,
+            @RequestParam(name = ApiConstants.HUB_CHALLENGE, required = false) String challenge) {
 
         return ingestUseCase.resolveHandshake(mode, verifyToken, challenge)
                 .map(ResponseEntity::ok)

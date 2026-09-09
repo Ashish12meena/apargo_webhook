@@ -25,10 +25,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class KafkaEventPublisher implements EventPublisherPort {
 
-    private static final String HEADER_EVENT_ID = "eventId";
-    private static final String HEADER_LANE = "lane";
-    private static final String HEADER_FIELD = "field";
-
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final WebhookEventMapper mapper;
@@ -59,9 +55,9 @@ public class KafkaEventPublisher implements EventPublisherPort {
 
         ProducerRecord<String, String> record =
                 new ProducerRecord<>(event.topic(), event.partitionKey(), body);
-        addHeader(record, HEADER_EVENT_ID, event.id());
-        addHeader(record, HEADER_LANE, event.lane() == null ? null : event.lane().name());
-        addHeader(record, HEADER_FIELD, event.field());
+        addHeader(record, MessagingConstants.HEADER_EVENT_ID, event.id());
+        addHeader(record, MessagingConstants.HEADER_LANE, event.lane() == null ? null : event.lane().name());
+        addHeader(record, MessagingConstants.HEADER_FIELD, event.field());
 
         return kafkaTemplate.send(record).thenAccept(result -> metrics.recordPublished(event.lane()));
     }

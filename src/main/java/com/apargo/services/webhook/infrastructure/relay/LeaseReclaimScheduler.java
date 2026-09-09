@@ -1,6 +1,7 @@
 package com.apargo.services.webhook.infrastructure.relay;
 
 import com.apargo.services.webhook.application.service.EventRelayService;
+import com.apargo.services.webhook.infrastructure.config.WebhookDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -17,6 +18,10 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(prefix = "webhook.relay", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class LeaseReclaimScheduler {
 
+    private static final String RECLAIM_INTERVAL =
+            "${webhook.relay.lease-reclaim-interval:"
+                    + WebhookDefaults.RELAY_LEASE_RECLAIM_INTERVAL + "}";
+
     private final EventRelayService relayService;
 
     public LeaseReclaimScheduler(EventRelayService relayService) {
@@ -24,8 +29,8 @@ public class LeaseReclaimScheduler {
     }
 
     @Scheduled(
-            fixedDelayString = "${webhook.relay.lease-reclaim-interval:30s}",
-            initialDelayString = "${webhook.relay.lease-reclaim-interval:30s}")
+            fixedDelayString = RECLAIM_INTERVAL,
+            initialDelayString = RECLAIM_INTERVAL)
     public void reclaim() {
         try {
             relayService.reclaimExpiredLeases();

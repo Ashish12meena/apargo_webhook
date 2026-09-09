@@ -1,6 +1,7 @@
 package com.apargo.services.webhook.infrastructure.relay;
 
 import com.apargo.services.webhook.application.service.EventRelayService;
+import com.apargo.services.webhook.infrastructure.config.WebhookDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -18,6 +19,14 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(prefix = "webhook.relay", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class EventRelayScheduler {
 
+    /**
+     * The placeholder and its fallback, in one constant so the two cannot disagree. The fallback is
+     * {@link WebhookDefaults} rather than a literal, so there is exactly one place in the codebase
+     * that says what the poll interval is when nobody configures it.
+     */
+    private static final String POLL_INTERVAL =
+            "${webhook.relay.poll-interval:" + WebhookDefaults.RELAY_POLL_INTERVAL + "}";
+
     private final EventRelayService relayService;
 
     public EventRelayScheduler(EventRelayService relayService) {
@@ -25,8 +34,8 @@ public class EventRelayScheduler {
     }
 
     @Scheduled(
-            fixedDelayString = "${webhook.relay.poll-interval:500ms}",
-            initialDelayString = "${webhook.relay.poll-interval:500ms}")
+            fixedDelayString = POLL_INTERVAL,
+            initialDelayString = POLL_INTERVAL)
     public void drain() {
         try {
             relayService.drainOnce();

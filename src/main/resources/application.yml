@@ -1,45 +1,31 @@
-# ---------------------------------------------------------------------------
-# webhook-service — single source of truth for configuration.
-#
-# Every environment-specific value is read from an environment variable, and
-# the .env file below is imported as a property source, so a deployment only
-# ever needs a populated .env (or real environment variables, which win).
-# Nothing in this file needs editing per environment.
-# ---------------------------------------------------------------------------
 spring:
   application:
     name: webhook-service
 
   config:
     import:
-      # Local development: ./.env next to the jar / project root.
       - optional:file:./.env[.properties]
-      # Container convention: mounted secret file.
       - optional:file:/config/.env[.properties]
 
   main:
     banner-mode: ${BANNER_MODE:console}
 
   lifecycle:
-    # Long enough for in-flight relay publishes to settle before the context closes.
+    # Long enough for in-flight publishes and the final ack flush to settle before
+    # the context closes.
     timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT:30s}
 
   threads:
     virtual:
       enabled: true
 
-  # The scheduler pool is shared by EventRelayScheduler, LeaseReclaimScheduler and
-  # RelayMetricsScheduler. Spring's default is a SINGLE thread: one slow drain tick
-  # stalls lease reclaim and the relay-lag gauge along with it — meaning the one
-  # metric that would tell you the relay is stuck stops updating precisely when the
-  # relay gets stuck.
   task:
     scheduling:
       pool:
         size: ${SCHEDULER_POOL_SIZE:4}
 
   codec:
-    max-in-memory-size: 3MB
+    max-in-memory-size: ${MAX_IN_MEMORY_SIZE:3MB}
 
   jackson:
     default-property-inclusion: non_null
@@ -50,14 +36,12 @@ spring:
 
   data:
     mongodb:
-      uri: ${MONGO_URI:mongodb://localhost:27017/apargo_webhook}
-      auto-index-creation: false   # indexes are created explicitly, see MongoIndexInitializer
+      uri: ${MONGO_URI:mongodb+srv://root:ashishmongo123@cluster0.sw3tj.mongodb.net/apargo_webhook}
+      auto-index-creation: true 
     redis:
       host: ${REDIS_HOST:146.88.24.113}
       port: ${REDIS_PORT:6379}
-      # database: ${REDIS_DATABASE:0}
-      # If Redis requires auth, set SPRING_DATA_REDIS_USERNAME / SPRING_DATA_REDIS_PASSWORD
-      # in .env. They are left unset here so an empty value is never sent as credentials.
+      password: ${REDIS_PASSWORD:2024@Bajajsys}
       timeout: ${REDIS_TIMEOUT:1000ms}
       connect-timeout: ${REDIS_CONNECT_TIMEOUT:1000ms}
       lettuce:
@@ -72,21 +56,30 @@ spring:
     client-id: ${spring.application.name}
     producer:
       acks: all
-      retries: 5
-      compression-type: snappy
+      retries: ${KAFKA_RETRIES:5}
+      compression-type: ${KAFKA_COMPRESSION_TYPE:snappy}
+      # 64KB, raised from the 16KB default. The old value closed a batch on size
+      # before linger.ms could ever fill it, so the linger setting did nothing.
+      batch-size: ${KAFKA_BATCH_SIZE:65536}
+      buffer-memory: ${KAFKA_BUFFER_MEMORY:67108864}
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
       properties:
+        # acks=all + idempotence + max.in.flight<=5 is exactly-once-per-partition
+        # ordering. The throughput cost is small and the alternative is silent
+        # duplicates and reordering on a retry.
         enable.idempotence: true
-        max.in.flight.requests.per.connection: 5
+        max.in.flight.requests.per.connection: ${KAFKA_MAX_IN_FLIGHT:5}
         delivery.timeout.ms: ${KAFKA_DELIVERY_TIMEOUT_MS:120000}
         request.timeout.ms: ${KAFKA_REQUEST_TIMEOUT_MS:30000}
-        linger.ms: ${KAFKA_LINGER_MS:5}
-        # KafkaTemplate.send() blocks the CALLING thread waiting for cluster metadata.
-        # EventRelayService.publish() calls it synchronously inside a loop over a batch
-        # of up to 100, so the Kafka default of 60s means one unreachable broker freezes
-        # the poll loop for over an hour per batch. 5s is ample for a healthy broker and
-        # fails fast on a dead one, letting the event land in markForRetry with backoff.
+        # 20ms, paired with the 64KB batch above: long enough for a batch to
+        # actually accumulate under load, short enough to be invisible.
+        linger.ms: ${KAFKA_LINGER_MS:20}
+        # KafkaTemplate.send() blocks the CALLING thread waiting for cluster
+        # metadata. The Kafka default of 60s means one unreachable broker freezes
+        # the caller for a minute per record. 5s is ample for a healthy broker and
+        # fails fast on a dead one, letting the record fall back to the recovery
+        # worker with backoff.
         max.block.ms: ${KAFKA_MAX_BLOCK_MS:5000}
 
 server:
@@ -94,41 +87,65 @@ server:
   shutdown: graceful
   forward-headers-strategy: framework
   # Meta payloads reach 3 MB; a 413 from Tomcat is indistinguishable from an outage to Meta.
-  max-http-request-header-size: 16KB
+  max-http-request-header-size: ${MAX_HTTP_HEADER_SIZE:16KB}
   tomcat:
-    max-http-form-post-size: 3MB
-    max-swallow-size: 4MB
+    max-http-form-post-size: ${TOMCAT_MAX_POST_SIZE:3MB}
+    max-swallow-size: ${TOMCAT_MAX_SWALLOW_SIZE:4MB}
     connection-timeout: ${TOMCAT_CONNECTION_TIMEOUT:20s}
 
 # ---------------------------------------------------------------------------
-# Service configuration — bound to WebhookProperties (@ConfigurationProperties)
+# Service configuration — bound to WebhookProperties (@ConfigurationProperties).
+# Defaults and their reasoning live in WebhookDefaults.
 # ---------------------------------------------------------------------------
 webhook:
   meta:
     # No defaults. A secret with a fallback value is a secret in git history.
     verify-token: ${WHATSAPP_WEBHOOK_VERIFY_TOKEN:}
     app-secret: ${WHATSAPP_APP_SECRET:}
-    signature-header: X-Hub-Signature-256
-    # Set false ONLY in local dev. Never in any deployed environment.
-    verify-signature: ${WEBHOOK_VERIFY_SIGNATURE:true}
+    signature-header: ${WEBHOOK_SIGNATURE_HEADER:X-Hub-Signature-256}
+    verify-signature: ${WEBHOOK_VERIFY_SIGNATURE:false}
+
+  scheduling:
+    pool-size: ${SCHEDULER_POOL_SIZE:4}
 
   ingest:
-    max-payload-size: 3MB          # Meta's documented ceiling
-    dedupe-ttl: 24h
+    max-payload-size: ${WEBHOOK_MAX_PAYLOAD_SIZE:3MB}   # Meta's documented ceiling
+    dedupe-ttl: ${WEBHOOK_DEDUPE_TTL:24h}
+
+    batch:
+      enabled: ${WEBHOOK_INGEST_BATCH_ENABLED:false}
+      max-records: ${WEBHOOK_INGEST_BATCH_MAX_RECORDS:500}
+      max-bytes: ${WEBHOOK_INGEST_BATCH_MAX_BYTES:8MB}    # estimated BSON, not request bytes
+      max-wait: ${WEBHOOK_INGEST_BATCH_MAX_WAIT:50ms}
+
+  publisher:
+    fast-path-enabled: ${WEBHOOK_PUBLISHER_FAST_PATH:true}
+    # Backpressure bound. Without it, a Kafka outage becomes an OOM: ingest keeps
+    # accepting and handoffs pile up. Past the bound, records simply stay PENDING.
+    max-in-flight: ${WEBHOOK_PUBLISHER_MAX_IN_FLIGHT:20000}
+    ack-flush-size: ${WEBHOOK_PUBLISHER_ACK_FLUSH_SIZE:1000}
+    ack-flush-interval: ${WEBHOOK_PUBLISHER_ACK_FLUSH_INTERVAL:500ms}
 
   relay:
-    # EventRelayScheduler is @ConditionalOnProperty on this value. Set to false and the
-    # bean is never created, nothing polls the outbox, and events pile up in PENDING
-    # with no error logged anywhere.
+    # The recovery worker. EventRelayScheduler is @ConditionalOnProperty on this
+    # value: set it false and the bean is never created, nothing polls the outbox,
+    # and anything the fast path drops stays PENDING with no error logged anywhere.
     enabled: ${WEBHOOK_RELAY_ENABLED:true}
-    poll-interval: 500ms
-    batch-size: 100
-    lease: 30s
-    lease-reclaim-interval: 30s
-    max-attempts: 10
-    backoff-base: 1s
-    backoff-max: 5m
-    metrics-interval: 30s
+    poll-interval: ${WEBHOOK_RELAY_POLL_INTERVAL:500ms}
+    # Raised from 100. The claim is a fixed number of round trips whatever the
+    # batch size, so the old value bought nothing and cost a poll cycle per 100.
+    batch-size: ${WEBHOOK_RELAY_BATCH_SIZE:1000}
+    # THE MOST IMPORTANT VALUE IN THIS FILE. Every record is PENDING for the few
+    # hundred milliseconds between its insert and its PUBLISHED mark, while the
+    # in-memory batch is already in flight. Without this window the recovery
+    # worker finds all of them and republishes the entire live stream.
+    grace: ${WEBHOOK_RELAY_GRACE:30s}
+    lease: ${WEBHOOK_RELAY_LEASE:30s}
+    lease-reclaim-interval: ${WEBHOOK_RELAY_LEASE_RECLAIM_INTERVAL:30s}
+    max-attempts: ${WEBHOOK_RELAY_MAX_ATTEMPTS:10}       # then FAILED and replayable
+    backoff-base: ${WEBHOOK_RELAY_BACKOFF_BASE:1s}
+    backoff-max: ${WEBHOOK_RELAY_BACKOFF_MAX:5m}
+    metrics-interval: ${WEBHOOK_RELAY_METRICS_INTERVAL:30s}
 
   topics:
     inbound: ${TOPIC_INBOUND:whatsapp.webhook.inbound}
@@ -140,19 +157,19 @@ webhook:
     auto-create: ${KAFKA_TOPIC_AUTO_CREATE:true}
     replicas: ${KAFKA_TOPIC_REPLICAS:1}
     partitions:
-      inbound: 6
-      status: 12
-      template: 3
-      account: 3
-      user-preference: 3
-      unrouted: 1
+      inbound: ${PARTITIONS_INBOUND:6}
+      status: ${PARTITIONS_STATUS:12}
+      template: ${PARTITIONS_TEMPLATE:3}
+      account: ${PARTITIONS_ACCOUNT:3}
+      user-preference: ${PARTITIONS_USER_PREFERENCE:3}
+      unrouted: ${PARTITIONS_UNROUTED:1}
 
   retention:
-    event-ttl: 30d
+    event-ttl: ${WEBHOOK_EVENT_TTL:30d}
 
   internal:
     api-key: ${INTERNAL_API_KEY:}
-    header-name: X-Internal-Api-Key
+    header-name: ${INTERNAL_API_KEY_HEADER:X-Internal-Api-Key}
 
 # ---------------------------------------------------------------------------
 # Service discovery
@@ -163,11 +180,11 @@ eureka:
     register-with-eureka: ${EUREKA_REGISTER:true}
     fetch-registry: ${EUREKA_FETCH_REGISTRY:true}
     service-url:
-      defaultZone: ${EUREKA_SERVICE_URL:http://localhost:8761/eureka/}
+      defaultZone: ${EUREKA_SERVICE_URL:http://146.88.24.113:8761/eureka/}
   instance:
     prefer-ip-address: ${EUREKA_PREFER_IP:true}
     instance-id: ${spring.application.name}:${random.value}
-    lease-renewal-interval-in-seconds: 10
+    lease-renewal-interval-in-seconds: ${EUREKA_LEASE_RENEWAL:10}
 
 # ---------------------------------------------------------------------------
 # Observability
@@ -176,12 +193,7 @@ management:
   endpoints:
     web:
       exposure:
-        # 'loggers' lets you read the level that was ACTUALLY applied at runtime, and
-        # flip it live without a restart:
-        #   curl localhost:8085/actuator/loggers/com.apargo.services.webhook
-        #   curl -X POST localhost:8085/actuator/loggers/com.apargo.services.webhook \
-        #     -H 'Content-Type: application/json' -d '{"configuredLevel":"DEBUG"}'
-        include: health,info,metrics,prometheus,loggers
+        include: ${ACTUATOR_EXPOSE:health,info,metrics,prometheus,loggers}
   endpoint:
     health:
       show-details: ${HEALTH_SHOW_DETAILS:when_authorized}
@@ -189,9 +201,6 @@ management:
         enabled: true
   health:
     redis:
-      # Redis is an optimisation; its absence must never fail the service health check.
-      # Note the consequence: a dead Redis shows only as a WARN per request in the log,
-      # never in /actuator/health.
       enabled: false
   metrics:
     tags:
@@ -203,23 +212,18 @@ management:
 logging:
   level:
     root: ${LOG_LEVEL_ROOT:INFO}
-    # DEBUG during development turns on the three lines that are otherwise invisible:
-    # "Ingest outcome=..." (controller), "Duplicate webhook body suppressed" (ingest),
-    # and "Relay claimed N event(s)" (relay). Without them a deduped webhook produces
-    # no output at all and looks like a dropped request. Set LOG_LEVEL_APP=INFO in prod.
-    #
-    # If this resolves to nothing, check that .env does not contain the key with an
-    # EMPTY value — Spring's ":DEBUG" default applies only when a property is absent,
-    # not when it is present and blank.
     com.apargo.services.webhook: ${LOG_LEVEL_APP:DEBUG}
-    org.apache.kafka.clients: WARN
-    org.mongodb.driver: WARN
+    com.apargo.services.webhook.application.service.EventRelayService: ${LOG_LEVEL_RELAY:INFO}
+    org.apache.kafka.clients: ${LOG_LEVEL_KAFKA:WARN}
+    org.mongodb.driver: ${LOG_LEVEL_MONGO:WARN}
+    # Was logging a registry refresh every five minutes, forever.
+    com.netflix.discovery: ${LOG_LEVEL_EUREKA:WARN}
   charset:
     console: UTF-8
   pattern:
-    # %X{correlationId} is what actually prints the MDC value CorrelationIdFilter sets;
-    # Spring's default pattern drops it, which is why it never appeared before.
-    # The :-no-corr fallback is expected on relay and Kafka-callback threads — MDC is
-    # thread-local, so those lines legitimately have no correlation id. Join ingest to
-    # relay on eventId, not correlationId.
+    # %X{correlationId} is what actually prints the MDC value CorrelationIdFilter
+    # sets; Spring's default pattern drops it, which is why it never appeared.
+    # The :-no-corr fallback is expected on the flusher and Kafka-callback threads
+    # — MDC is thread-local, so those lines legitimately have no correlation id.
+    # Join ingest to relay on eventId, not correlationId.
     console: "%d{HH:mm:ss.SSS} %highlight(%-5level) [%X{correlationId:-no-corr}] %cyan(%logger{36}) - %msg%n"

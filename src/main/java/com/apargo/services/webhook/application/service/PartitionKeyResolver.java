@@ -1,6 +1,7 @@
 package com.apargo.services.webhook.application.service;
 
 import com.apargo.services.webhook.domain.model.Lane;
+import com.apargo.services.webhook.domain.model.MetaJson;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Component;
 
@@ -24,15 +25,15 @@ public class PartitionKeyResolver {
 
     public String resolve(Lane lane, JsonNode value, String providerWabaId, String providerPhoneNumberId) {
         String key = switch (lane) {
-            case INBOUND -> compose(providerPhoneNumberId, firstOf(value, "messages", "from"));
-            case STATUS -> firstOf(value, "statuses", "id");
+            case INBOUND -> compose(providerPhoneNumberId, firstOf(value, MetaJson.MESSAGES, MetaJson.FROM));
+            case STATUS -> firstOf(value, MetaJson.STATUSES, MetaJson.ID);
             case TEMPLATE -> firstNonBlank(
-                    JsonNodes.text(value, "message_template_id"),
-                    JsonNodes.text(value, "message_template_name"),
+                    JsonNodes.text(value, MetaJson.MESSAGE_TEMPLATE_ID),
+                    JsonNodes.text(value, MetaJson.MESSAGE_TEMPLATE_NAME),
                     providerWabaId);
             case ACCOUNT -> firstNonBlank(providerPhoneNumberId, providerWabaId);
             case USER_PREFERENCE ->
-                    compose(providerPhoneNumberId, firstOf(value, "user_preferences", "wa_id"));
+                    compose(providerPhoneNumberId, firstOf(value, MetaJson.USER_PREFERENCES, MetaJson.WA_ID));
             case OTHER -> providerWabaId;
         };
         // A null key means round-robin, which loses per-entity ordering, so fall back as far as

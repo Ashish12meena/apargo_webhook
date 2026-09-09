@@ -1,6 +1,7 @@
 package com.apargo.services.webhook.infrastructure.dedupe;
 
 import com.apargo.services.webhook.infrastructure.config.WebhookProperties;
+import com.apargo.services.webhook.infrastructure.persistence.PersistenceConstants;
 import java.time.Duration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -15,9 +16,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class RedisDedupeAdapter implements DedupeStore {
 
-    private static final String KEY_PREFIX = "wh:dedupe:";
-    private static final String MARKER = "1";
-
     private final StringRedisTemplate redisTemplate;
     private final Duration ttl;
 
@@ -28,7 +26,8 @@ public class RedisDedupeAdapter implements DedupeStore {
 
     @Override
     public boolean markSeen(String bodyHash) {
-        Boolean firstTime = redisTemplate.opsForValue().setIfAbsent(KEY_PREFIX + bodyHash, MARKER, ttl);
+        Boolean firstTime = redisTemplate.opsForValue().setIfAbsent(PersistenceConstants.DEDUPE_KEY_PREFIX + bodyHash,
+                PersistenceConstants.DEDUPE_MARKER, ttl);
         // A null reply means the command gave no answer; treat the hash as unseen and let the
         // durable store settle it, rather than dropping a possibly-new event.
         return firstTime == null || firstTime;

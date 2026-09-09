@@ -2,6 +2,7 @@ package com.apargo.services.webhook.application.service;
 
 import com.apargo.services.webhook.domain.model.Lane;
 import com.apargo.services.webhook.domain.model.MetaField;
+import com.apargo.services.webhook.domain.model.MetaJson;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,9 +18,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class LaneClassifier {
-
-    private static final String MESSAGES_ARRAY = "messages";
-    private static final String STATUSES_ARRAY = "statuses";
 
     /**
      * @param field the change's routing key
@@ -52,10 +50,10 @@ public class LaneClassifier {
 
     private List<Lane> classifyMessages(JsonNode value) {
         List<Lane> lanes = new ArrayList<>(2);
-        if (hasEntries(value, MESSAGES_ARRAY)) {
+        if (hasEntries(value, MetaJson.MESSAGES)) {
             lanes.add(Lane.INBOUND);
         }
-        if (hasEntries(value, STATUSES_ARRAY)) {
+        if (hasEntries(value, MetaJson.STATUSES)) {
             lanes.add(Lane.STATUS);
         }
         // Account-level errors arrive under "messages" with neither array present.
