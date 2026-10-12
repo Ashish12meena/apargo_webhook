@@ -2,8 +2,12 @@ spring:
   application:
     name: webhook-service
 
+  # Platform configuration standard (docs/configuration): shared infrastructure addresses come from
+  # ../platform.env, this service's own settings and secrets from ./.env, then /config/.env (later
+  # imports win). Real environment variables override all of them.
   config:
     import:
+      - optional:file:${APARGO_PLATFORM_ENV:../platform.env}[.properties]
       - optional:file:./.env[.properties]
       - optional:file:/config/.env[.properties]
 
@@ -83,7 +87,7 @@ spring:
         max.block.ms: ${KAFKA_MAX_BLOCK_MS:5000}
 
 server:
-  port: ${SERVER_PORT:8090}
+  port: ${SERVER_PORT:${WEBHOOK_SERVICE_PORT:8090}}
   shutdown: graceful
   forward-headers-strategy: framework
   # Meta payloads reach 3 MB; a 413 from Tomcat is indistinguishable from an outage to Meta.
@@ -177,12 +181,13 @@ webhook:
 eureka:
   client:
     enabled: ${EUREKA_ENABLED:false}
-    register-with-eureka: ${EUREKA_REGISTER:true}
+    register-with-eureka: ${EUREKA_REGISTER_WITH_EUREKA:${EUREKA_REGISTER:true}}
     fetch-registry: ${EUREKA_FETCH_REGISTRY:true}
     service-url:
-      defaultZone: ${EUREKA_SERVICE_URL:http://146.88.24.113:8761/eureka/}
+      # EUREKA_DEFAULT_ZONE is the platform-wide name; EUREKA_SERVICE_URL is still honoured.
+      defaultZone: ${EUREKA_DEFAULT_ZONE:${EUREKA_SERVICE_URL:http://146.88.24.113:8761/eureka/}}
   instance:
-    prefer-ip-address: ${EUREKA_PREFER_IP:true}
+    prefer-ip-address: ${EUREKA_PREFER_IP_ADDRESS:${EUREKA_PREFER_IP:true}}
     instance-id: ${spring.application.name}:${random.value}
     lease-renewal-interval-in-seconds: ${EUREKA_LEASE_RENEWAL:10}
 
@@ -193,10 +198,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: ${ACTUATOR_EXPOSE:health,info,metrics,prometheus,loggers}
+        include: ${MANAGEMENT_ENDPOINTS:${ACTUATOR_EXPOSE:health,info,metrics,prometheus,loggers}}
   endpoint:
     health:
-      show-details: ${HEALTH_SHOW_DETAILS:when_authorized}
+      show-details: ${MANAGEMENT_HEALTH_DETAILS:${HEALTH_SHOW_DETAILS:when_authorized}}
       probes:
         enabled: true
   health:
