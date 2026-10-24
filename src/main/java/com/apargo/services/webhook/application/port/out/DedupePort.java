@@ -15,4 +15,10 @@ public interface DedupePort {
      * @return true if this hash has not been seen before and processing should continue
      */
     boolean markSeen(String bodyHash);
+
+    /**
+     * Undoes {@link #markSeen} for a body that could not be stored, so Meta's retry of it is
+     * processed rather than suppressed as a duplicate. Never throws.
+     */
+    void forget(String bodyHash);
 }

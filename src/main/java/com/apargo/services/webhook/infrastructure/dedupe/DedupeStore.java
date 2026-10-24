@@ -9,6 +9,13 @@ public interface DedupeStore {
      */
     boolean markSeen(String bodyHash);
 
+    /**
+     * Removes the hash, if present.
+     *
+     * @throws RuntimeException when the store is unreachable
+     */
+    void forget(String bodyHash);
+
     /** Human readable name, used only in logs. */
     String name();
 }

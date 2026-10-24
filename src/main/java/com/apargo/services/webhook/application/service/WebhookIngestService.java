@@ -105,10 +105,20 @@ public class WebhookIngestService implements IngestWebhookUseCase {
             }
 
             Instant receivedAt = Instant.now(clock);
-            if (isOversized(rawBody)) {
-                return storeTruncated(rawBody, bodyHash, receivedAt);
+            try {
+                if (isOversized(rawBody)) {
+                    return storeTruncated(rawBody, bodyHash, receivedAt);
+                }
+                return storeChanges(rawBody, bodyHash, receivedAt);
+            } catch (UnparseablePayloadException e) {
+                // Meta's retry would fail the same way; keeping the mark stops it being re-parsed.
+                throw e;
+            } catch (RuntimeException e) {
+                // Marked seen but not stored. Without this, Meta's retry was suppressed as a
+                // duplicate and the event was lost for the dedupe window (24h).
+                dedupe.forget(bodyHash);
+                throw e;
             }
-            return storeChanges(rawBody, bodyHash, receivedAt);
         } finally {
             metrics.stopIngestTimer(sample);
         }

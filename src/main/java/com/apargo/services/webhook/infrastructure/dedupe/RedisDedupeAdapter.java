@@ -34,6 +34,11 @@ public class RedisDedupeAdapter implements DedupeStore {
     }
 
     @Override
+    public void forget(String bodyHash) {
+        redisTemplate.delete(PersistenceConstants.DEDUPE_KEY_PREFIX + bodyHash);
+    }
+
+    @Override
     public String name() {
         return "redis";
     }

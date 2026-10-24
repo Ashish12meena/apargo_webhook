@@ -5,6 +5,8 @@ import java.time.Clock;
 import java.time.Instant;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Component;
 
 /**
@@ -33,6 +35,11 @@ public class MongoDedupeFallback implements DedupeStore {
         } catch (DuplicateKeyException e) {
             return false;
         }
+    }
+
+    @Override
+    public void forget(String bodyHash) {
+        mongoTemplate.remove(Query.query(Criteria.where("_id").is(bodyHash)), DedupeDocument.class);
     }
 
     @Override

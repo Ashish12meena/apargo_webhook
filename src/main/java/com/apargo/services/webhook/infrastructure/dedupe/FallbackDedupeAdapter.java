@@ -41,4 +41,17 @@ public class FallbackDedupeAdapter implements DedupePort {
             return true;
         }
     }
+
+    /** Both stores: markSeen may have written to either. */
+    @Override
+    public void forget(String bodyHash) {
+        for (DedupeStore store : new DedupeStore[] {primary, fallback}) {
+            try {
+                store.forget(bodyHash);
+            } catch (RuntimeException e) {
+                log.warn("Could not forget body hash in {}; Meta's retry of it may be suppressed until "
+                        + "the entry expires: {}", store.name(), e.getMessage());
+            }
+        }
+    }
 }
